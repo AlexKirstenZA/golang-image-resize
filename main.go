@@ -4,12 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
 func main() {
+	err := cleanUpFiles()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	urls := []string{
 		"https://www.placecage.com/800/1300",
 		"https://www.fillmurray.com/1000/1500",
@@ -50,4 +57,20 @@ func downloadImage(url string, fileName string) (string, error) {
 	}
 
 	return fileName, nil
+}
+
+// Removes old jpeg images from disk
+func cleanUpFiles() error {
+	files, err := filepath.Glob("*.jpeg")
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		if err := os.Remove(f); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
