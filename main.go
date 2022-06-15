@@ -9,12 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 )
 
 type downloadResult struct {
 	filePath string
-	err error
+	err      error
 }
 
 func main() {
@@ -30,17 +29,17 @@ func main() {
 		"https://www.stevensegallery.com/1500/1000",
 	}
 
-	wg := new(sync.WaitGroup)
-	wg.Add(len(urls))
-
 	results := make(chan downloadResult, len(urls))
 
 	for i, url := range urls {
 		filename := "image_" + strconv.Itoa(i) + ".jpeg"
-		go downloadImage(wg, url, filename, results)
+		go func(url string, filename string) {
+			fp, err := downloadImage(url, filename)
+			results <- downloadResult{filePath: fp, err: err}
+		}(url, filename)
 	}
 
-	for _ = range urls {
+	for range urls {
 		result := <-results
 		if result.err != nil {
 			fmt.Println("Error occured during download: ", result.err)
@@ -49,50 +48,41 @@ func main() {
 
 		fmt.Println("Download successful:", result.filePath)
 	}
-
-	wg.Wait()
 }
 
-func downloadImage(wg *sync.WaitGroup, url string, fileName string, ch chan downloadResult) {
-	defer wg.Done()
-
+func downloadImage(url string, fileName string) (string, error) {
 	// Download image
 	resp, err := http.Get(url)
 	if err != nil {
-		ch <- downloadResult{filePath: "", err: err}
-		return
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	// Handle non 200 response code
 	if resp.StatusCode != 200 {
-		ch <- downloadResult{filePath: "", err: errors.New("Received non 200 response code")}
-		return
+		return "", errors.New("Received non 200 response code")
 	}
 
 	// Create file on disk
 	file, err := os.Create(fileName)
 	if err != nil {
-		ch <- downloadResult{filePath: "", err: err}
-		return
+		return "", err
 	}
 	defer file.Close()
 
 	// Write byte stream from response body into file contents
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
-		ch <- downloadResult{filePath: "", err: err}
-		return
+		return "", err
 	}
 
 	// Get absolute filepath to return via channel
 	fp, err := filepath.Abs(fileName)
 	if err != nil {
-		ch <- downloadResult{filePath: "", err: err}
-		return
+		return "", err
 	}
 
-	ch <- downloadResult{filePath: fp, err: err}
+	return fp, nil
 }
 
 // Removes old jpeg images from disk
