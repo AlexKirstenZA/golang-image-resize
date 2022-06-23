@@ -20,7 +20,8 @@ type imageResult struct {
 	err      error
 }
 
-type imageSize struct {
+type imageStyle struct {
+	name string
 	maxWidth int
 	maxHeight int
 }
@@ -50,13 +51,11 @@ func main() {
 	}
 
 	// Three thumbnails per original image
-	sizes := map[string]imageSize {
-		"modal": {maxHeight: 600, maxWidth: 600},
-		"gallery": {maxHeight: 300, maxWidth: 300},
-		"avatar":  {maxHeight: 120, maxWidth: 120},
-	}
+	var sizes []imageStyle
+	sizes = append(sizes, imageStyle{name: "modal", maxHeight: 600, maxWidth: 600})
+	sizes = append(sizes, imageStyle{name: "gallery", maxHeight: 300, maxWidth: 300})
+	sizes = append(sizes, imageStyle{name: "avatar", maxHeight: 120, maxWidth: 120})
 
-	//var resizeChannels []chan imageResult
 	resizeResult := make(chan imageResult, len(urls) * len(sizes))
 	var count int
 
@@ -70,13 +69,14 @@ func main() {
 		fmt.Println("Download successful:", result.filePath)
 		count++
 
-		for style, size := range sizes {
-			filename := "image_" + strconv.Itoa(i) + "_" + style + ".jpeg"
+		// Process different image styles for downloaded image
+		for _, style := range sizes {
+			filename := "image_" + strconv.Itoa(i) + "_" + style.name + ".jpeg"
 
-			go func(fileName string, size imageSize) {
-				fp, err := scaleImage(filename, size)
+			go func(fileName string, style imageStyle) {
+				fp, err := scaleImage(filename, style)
 				resizeResult <- imageResult{filePath: fp, err: err}
-			}(filename, size)
+			}(filename, style)
 		}
 	}
 
@@ -121,7 +121,7 @@ func downloadImage(url string, fileName string) (string, error) {
 	return fp, nil
 }
 
-func scaleImage(fileName string, size imageSize) (string, error) {
+func scaleImage(fileName string, style imageStyle) (string, error) {
 	rand.Seed(time.Now().UnixNano())
 	n := rand.Intn(5)
 	time.Sleep(time.Duration(n)*time.Second)
