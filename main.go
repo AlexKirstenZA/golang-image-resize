@@ -3,6 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math/rand"
+	"time"
+
+	//"github.com/disintegration/imaging"
 	"io"
 	"log"
 	"net/http"
@@ -11,9 +15,14 @@ import (
 	"strconv"
 )
 
-type downloadResult struct {
+type imageResult struct {
 	filePath string
 	err      error
+}
+
+type imageSize struct {
+	maxWidth int
+	maxHeight int
 }
 
 func main() {
@@ -29,24 +38,51 @@ func main() {
 		"https://www.stevensegallery.com/1500/1000",
 	}
 
-	results := make(chan downloadResult, len(urls))
+	results := make(chan imageResult, len(urls))
 
 	for i, url := range urls {
 		filename := "image_" + strconv.Itoa(i) + ".jpeg"
+
 		go func(url string, filename string) {
 			fp, err := downloadImage(url, filename)
-			results <- downloadResult{filePath: fp, err: err}
+			results <- imageResult{filePath: fp, err: err}
 		}(url, filename)
 	}
 
-	for range urls {
+	// Three thumbnails per original image
+	sizes := map[string]imageSize {
+		"modal": {maxHeight: 600, maxWidth: 600},
+		"gallery": {maxHeight: 300, maxWidth: 300},
+		"avatar":  {maxHeight: 120, maxWidth: 120},
+	}
+
+	//var resizeChannels []chan imageResult
+	resizeResult := make(chan imageResult, len(urls) * len(sizes))
+	var count int
+
+	for i, _ := range urls {
 		result := <-results
 		if result.err != nil {
-			fmt.Println("Error occured during download: ", result.err)
+			fmt.Println("Error occurred during download: ", result.err)
 			continue
 		}
 
 		fmt.Println("Download successful:", result.filePath)
+		count++
+
+		for style, size := range sizes {
+			filename := "image_" + strconv.Itoa(i) + "_" + style + ".jpeg"
+
+			go func(fileName string, size imageSize) {
+				fp, err := scaleImage(filename, size)
+				resizeResult <- imageResult{filePath: fp, err: err}
+			}(filename, size)
+		}
+	}
+
+	for i := 0; i < count * len(sizes); i++ {
+		result := <-resizeResult
+		fmt.Println(result.filePath)
 	}
 }
 
@@ -83,6 +119,14 @@ func downloadImage(url string, fileName string) (string, error) {
 	}
 
 	return fp, nil
+}
+
+func scaleImage(fileName string, size imageSize) (string, error) {
+	rand.Seed(time.Now().UnixNano())
+	n := rand.Intn(5)
+	time.Sleep(time.Duration(n)*time.Second)
+
+	return "Done: " + fileName, nil
 }
 
 // Removes old jpeg images from disk
